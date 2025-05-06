@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Speaking Speed Test</title>
+    <style>
+        /* Basic reset and box-sizing */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start; /* Align to top for better mobile view with keyboard */
+            min-height: 100vh; /* Full viewport height */
+            background-color: #f0f2f5;
+            padding: 20px 10px; /* More padding on sides for mobile */
+            text-align: center;
+            font-size: 16px; /* Base font size for mobile readability */
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            width: 100%; /* Take full width of padded body */
+            max-width: 500px; /* Max width for larger phones/small tablets */
+        }
+        h1 {
+            color: #333;
+            font-size: 1.5em; /* Responsive font size */
+            margin-bottom: 15px;
+        }
+        .instructions {
+            margin-bottom: 20px;
+            color: #555;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+        .controls button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 20px; /* Larger padding for easier tapping */
+            text-align: center;
+            text-decoration: none;
+            display: block; /* Make buttons take full available width */
+            width: 100%;
+            font-size: 1em;
+            margin-bottom: 10px; /* Space between stacked buttons */
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background-color 0.3s;
+            font-weight: bold;
+        }
+        .controls button:last-child {
+            margin-bottom: 0;
+        }
+        .controls button:hover {
+            background-color: #0056b3;
+        }
+        .controls button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        #stopButton {
+            background-color: #dc3545;
+        }
+        #stopButton:hover:not(:disabled) {
+            background-color: #c82333;
+        }
+        .status {
+            margin-top: 20px;
+            font-weight: bold;
+            min-height: 24px; /* To prevent layout shifts */
+            font-size: 1em;
+        }
+        .status.listening { color: #28a745; }
+        .status.processing { color: #ffc107; }
+        .status.error { color: #dc3545; }
+
+        .transcript-container {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            min-height: 80px; /* Good space to see initial text */
+            max-height: 200px; /* Prevent it from taking too much screen */
+            overflow-y: auto; /* Allow scrolling if text is long */
+            text-align: left;
+            line-height: 1.6;
+            word-break: break-word; /* Ensure long words don't break layout */
+        }
+        .transcript-container strong {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 0.9em;
+        }
+        .transcript-container p {
+            font-style: italic;
+            color: #444;
+            font-size: 0.95em;
+        }
+        .results {
+            margin-top: 20px;
+            font-size: 1.1em;
+            line-height: 1.6;
+        }
+        .results span {
+            font-weight: bold;
+            color: #007bff;
+        }
+        .compatibility-notice {
+            margin-top: 25px;
+            font-size: 0.8em;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Speaking Speed Test</h1>
+
+        <div class="instructions">
+            <p>Tap "Start Speaking" and talk into your phone. Your words will appear below. Tap "Stop & Calculate" when done.</p>
+        </div>
+
+        <div class="controls">
+            <button id="startButton">Start Speaking</button>
+            <button id="stopButton" disabled>Stop & Calculate</button>
+        </div>
+
+        <div id="status" class="status">Ready.</div>
+
+        <div class="transcript-container">
+            <strong>Recognized Text (confirms audio is received):</strong>
+            <p id="transcriptOutput">...</p>
+        </div>
+
+        <div id="results" class="results"></div>
+
+        <div class="compatibility-notice">
+            Uses your browser's Speech Recognition. Works best in Chrome (Android) or Safari (iOS). Grant microphone access.
+        </div>
+    </div>
+
+    <script>
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const statusDiv = document.getElementById('status');
+        const transcriptOutput = document.getElementById('transcriptOutput');
+        const resultsDiv = document.getElementById('results');
+
+        let recognition;
+        let startTime;
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            statusDiv.textContent = "Speech Recognition not supported. Try Chrome or Safari.";
+            statusDiv.className = 'status error';
+            startButton.disabled = true;
+            stopButton.disabled = true;
+        } else {
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                statusDiv.textContent = "Listening... Speak now!";
+                statusDiv.className = 'status listening';
+                startButton.disabled = true;
+                stopButton.disabled = false;
+                resultsDiv.textContent = '';
+                transcriptOutput.textContent = '...';
+                finalTranscript = '';
+                interimTranscript = '';
+                startTime = new Date();
+            };
+
+            recognition.onresult = (event) => {
+                interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript + ' ';
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+                // Update live transcript - THIS IS YOUR AUDIO CONFIRMATION
+                transcriptOutput.textContent = finalTranscript + interimTranscript;
+            };
+
+            recognition.onend = () => {
+                statusDiv.textContent = "Processing complete. Tap Start to try again.";
+                statusDiv.className = 'status';
+                startButton.disabled = false;
+                stopButton.disabled = true;
+
+                if (finalTranscript.trim() === '' && interimTranscript.trim() === '') {
+                    resultsDiv.innerHTML = "No speech was detected. <br>Ensure microphone is working & permission granted.";
+                    transcriptOutput.textContent = 'No speech detected.';
+                    return;
+                }
+                
+                let fullText = (finalTranscript.trim() || interimTranscript.trim());
+                transcriptOutput.textContent = fullText || "No clear speech for final calculation.";
+
+                if (fullText) {
+                    const endTime = new Date();
+                    const timeDiffSeconds = (endTime - startTime) / 1000;
+                    const words = fullText.trim().split(/\s+/).filter(word => word.length > 0);
+                    const wordCount = words.length;
+
+                    if (wordCount > 0 && timeDiffSeconds > 0.1) { // Require at least 0.1s to avoid division by zero or tiny numbers
+                        const wpm = Math.round((wordCount / timeDiffSeconds) * 60);
+                        resultsDiv.innerHTML = `
+                            Duration: <span>${timeDiffSeconds.toFixed(2)}s</span><br>
+                            Word Count: <span>${wordCount}</span><br>
+                            Your Speed: <span>${wpm} WPM</span>
+                        `;
+                    } else if (wordCount === 0) {
+                         resultsDiv.innerHTML = "No words recognized for calculation.";
+                    } else {
+                        resultsDiv.innerHTML = "Not enough data for WPM (duration too short or no words).";
+                    }
+                } else {
+                     resultsDiv.innerHTML = "No speech clearly recognized for calculation.";
+                }
+                finalTranscript = ''; // Clear for next run explicitly
+                interimTranscript = '';
+            };
+
+            recognition.onerror = (event) => {
+                let errorMessage = "Error: " + event.error;
+                if (event.error === 'no-speech') {
+                    errorMessage = "No speech detected. Check microphone.";
+                } else if (event.error === 'audio-capture') {
+                    errorMessage = "Mic capture failed. Ensure it's not in use.";
+                } else if (event.error === 'not-allowed') {
+                    errorMessage = "Microphone access denied by you or browser. Please allow in settings.";
+                }
+                statusDiv.textContent = errorMessage;
+                statusDiv.className = 'status error';
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                finalTranscript = '';
+                interimTranscript = '';
+            };
+        }
+
+        startButton.addEventListener('click', () => {
+            if (recognition) {
+                try {
+                    finalTranscript = '';
+                    interimTranscript = '';
+                    transcriptOutput.textContent = '...';
+                    resultsDiv.textContent = '';
+                    recognition.start();
+                } catch(e) {
+                    console.error("Error starting recognition:", e);
+                    if (e.name === 'InvalidStateError') {
+                        statusDiv.textContent = "Recognition already active. Please wait or refresh.";
+                    } else {
+                        statusDiv.textContent = "Error starting. Refresh or check mic permission.";
+                    }
+                    statusDiv.className = 'status error';
+                    startButton.disabled = false; // Re-enable start if it failed
+                    stopButton.disabled = true;
+                }
+            }
+        });
+
+        stopButton.addEventListener('click', () => {
+            if (recognition) {
+                recognition.stop(); // This will trigger the 'onend' event
+                statusDiv.textContent = "Stopping and calculating...";
+                statusDiv.className = 'status processing';
+            }
+        });
+
+    </script>
+</body>
+</html>
