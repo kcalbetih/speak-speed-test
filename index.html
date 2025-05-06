@@ -154,7 +154,7 @@
     </div>
 
     <script>
-        const startButton = document.getElementById('startButton');
+               const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
         const statusDiv = document.getElementById('status');
         const transcriptOutput = document.getElementById('transcriptOutput');
@@ -162,8 +162,8 @@
 
         let recognition;
         let startTime;
-        let finalTranscript = '';
-        let interimTranscript = '';
+        let accumulatedFinalTranscript = ''; // 用來儲存所有最終確認的文字片段
+        let currentInterimTranscript = ''; // 用來顯示當前即時辨識的文字
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
@@ -173,8 +173,8 @@
             stopButton.disabled = true;
         } else {
             recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
+            recognition.continuous = true; // 保持聆聽直到明確停止
+            recognition.interimResults = true; // 顯示即時結果
             recognition.lang = 'en-US';
 
             recognition.onstart = () => {
@@ -184,22 +184,25 @@
                 stopButton.disabled = false;
                 resultsDiv.textContent = '';
                 transcriptOutput.textContent = '...';
-                finalTranscript = '';
-                interimTranscript = '';
+                accumulatedFinalTranscript = ''; // 重置已確認的文字
+                currentInterimTranscript = ''; // 重置即時文字
                 startTime = new Date();
             };
 
             recognition.onresult = (event) => {
-                interimTranscript = '';
+                let interim_transcript_for_display = ''; // 僅用於本次 event 的 interim 部分
+
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     if (event.results[i].isFinal) {
-                        finalTranscript += event.results[i][0].transcript + ' ';
+                        // 將最終確認的片段加入到 accumulatedFinalTranscript
+                        accumulatedFinalTranscript += event.results[i][0].transcript + ' ';
                     } else {
-                        interimTranscript += event.results[i][0].transcript;
+                        // 將非最終的片段串接起來，形成當前的 interim 顯示
+                        interim_transcript_for_display += event.results[i][0].transcript;
                     }
                 }
-                // Update live transcript - THIS IS YOUR AUDIO CONFIRMATION
-                transcriptOutput.textContent = finalTranscript + interimTranscript;
+                currentInterimTranscript = interim_transcript_for_display; // 更新當前即時文字
+                transcriptOutput.textContent = accumulatedFinalTranscript + currentInterimTranscript; // 顯示已確認的 + 即時的
             };
 
             recognition.onend = () => {
@@ -208,38 +211,59 @@
                 startButton.disabled = false;
                 stopButton.disabled = true;
 
-                if (finalTranscript.trim() === '' && interimTranscript.trim() === '') {
-                    resultsDiv.innerHTML = "No speech was detected. <br>Ensure microphone is working & permission granted.";
-                    transcriptOutput.textContent = 'No speech detected.';
+                // 最終計算時，使用 accumulatedFinalTranscript
+                // 如果 accumulatedFinalTranscript 為空，但 currentInterimTranscript 有內容（例如使用者未說完就停止），
+                // 可以考慮也使用 currentInterimTranscript，但 accumulatedFinalTranscript 優先
+                let textForCalculation = accumulatedFinalTranscript.trim();
+
+                // 如果 accumulatedFinalTranscript 是空的，且 recognition 是被手動 stop() 的，
+                // 那麼 currentInterimTranscript 可能包含使用者最後未 final 的話語
+                // 但要注意，如果 recognition 是因為靜默而自動停止，currentInterimTranscript 可能是空的或不準確
+                // 為求簡化和準確，主要依賴 accumulatedFinalTranscript
+                if (!textForCalculation && currentInterimTranscript.trim() && (new Date() - startTime) / 1000 > 0.5) {
+                    // 這裡可以有一個策略決定是否在 accumulatedFinalTranscript 為空時使用 currentInterimTranscript
+                    // 暫時我們優先使用 accumulatedFinalTranscript，除非它是空的且有 interim。
+                    // 但這也可能導致重複計算，因為 interim 在下一次說話時可能變成 final。
+                    // 為了避免 1205 WPM 的問題，我們嚴格一點，主要看 final 的。
+                    // textForCalculation = currentInterimTranscript.trim(); // 可以打開這個，但要小心副作用
+                }
+
+                if (textForCalculation === '') {
+                     resultsDiv.innerHTML = "No clear speech was finalized for calculation. <br>Ensure you speak clearly and allow time for finalization.";
+                     transcriptOutput.textContent = accumulatedFinalTranscript || currentInterimTranscript || 'No speech detected.';
+                     return;
+                }
+
+                transcriptOutput.textContent = textForCalculation; // 只顯示用於計算的最終文字
+
+                const endTime = new Date();
+                const timeDiffSeconds = (endTime - startTime) / 1000;
+
+                // 避免時間過短導致 WPM 過高
+                if (timeDiffSeconds < 0.5 && textForCalculation.split(/\s+/).filter(word => word.length > 0).length <= 3) {
+                    resultsDiv.innerHTML = `Spoke for ${timeDiffSeconds.toFixed(2)}s. Too short for reliable WPM. <br>Recognized: "${textForCalculation}"`;
                     return;
                 }
-                
-                let fullText = (finalTranscript.trim() || interimTranscript.trim());
-                transcriptOutput.textContent = fullText || "No clear speech for final calculation.";
 
-                if (fullText) {
-                    const endTime = new Date();
-                    const timeDiffSeconds = (endTime - startTime) / 1000;
-                    const words = fullText.trim().split(/\s+/).filter(word => word.length > 0);
-                    const wordCount = words.length;
 
-                    if (wordCount > 0 && timeDiffSeconds > 0.1) { // Require at least 0.1s to avoid division by zero or tiny numbers
-                        const wpm = Math.round((wordCount / timeDiffSeconds) * 60);
-                        resultsDiv.innerHTML = `
-                            Duration: <span>${timeDiffSeconds.toFixed(2)}s</span><br>
-                            Word Count: <span>${wordCount}</span><br>
-                            Your Speed: <span>${wpm} WPM</span>
-                        `;
-                    } else if (wordCount === 0) {
-                         resultsDiv.innerHTML = "No words recognized for calculation.";
-                    } else {
-                        resultsDiv.innerHTML = "Not enough data for WPM (duration too short or no words).";
-                    }
+                const words = textForCalculation.trim().split(/\s+/).filter(word => word.length > 0);
+                const wordCount = words.length;
+
+                if (wordCount > 0 && timeDiffSeconds > 0.2) { // 稍微放寬一點點時間下限
+                    const wpm = Math.round((wordCount / timeDiffSeconds) * 60);
+                    resultsDiv.innerHTML = `
+                        Duration: <span>${timeDiffSeconds.toFixed(2)}s</span><br>
+                        Word Count: <span>${wordCount}</span><br>
+                        Your Speed: <span>${wpm} WPM</span>
+                    `;
+                } else if (wordCount === 0) {
+                     resultsDiv.innerHTML = "No words were clearly finalized for calculation.";
                 } else {
-                     resultsDiv.innerHTML = "No speech clearly recognized for calculation.";
+                    resultsDiv.innerHTML = "Not enough data for WPM (duration too short or no clear words finalized).";
                 }
-                finalTranscript = ''; // Clear for next run explicitly
-                interimTranscript = '';
+                // 重置以備下次使用
+                accumulatedFinalTranscript = '';
+                currentInterimTranscript = '';
             };
 
             recognition.onerror = (event) => {
@@ -255,18 +279,20 @@
                 statusDiv.className = 'status error';
                 startButton.disabled = false;
                 stopButton.disabled = true;
-                finalTranscript = '';
-                interimTranscript = '';
+                accumulatedFinalTranscript = '';
+                currentInterimTranscript = '';
             };
         }
 
         startButton.addEventListener('click', () => {
             if (recognition) {
                 try {
-                    finalTranscript = '';
-                    interimTranscript = '';
+                    // 重置狀態變數
+                    accumulatedFinalTranscript = '';
+                    currentInterimTranscript = '';
                     transcriptOutput.textContent = '...';
                     resultsDiv.textContent = '';
+                    
                     recognition.start();
                 } catch(e) {
                     console.error("Error starting recognition:", e);
@@ -284,12 +310,11 @@
 
         stopButton.addEventListener('click', () => {
             if (recognition) {
-                recognition.stop(); // This will trigger the 'onend' event
+                recognition.stop(); // 這會觸發 'onend' 事件
                 statusDiv.textContent = "Stopping and calculating...";
                 statusDiv.className = 'status processing';
             }
         });
-
     </script>
 </body>
 </html>
