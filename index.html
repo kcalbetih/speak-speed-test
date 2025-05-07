@@ -196,20 +196,40 @@
             };
 
             recognition.onresult = (event) => {
-                let interim_transcript_for_display = ''; // 僅用於本次 event 的 interim 部分
+    let new_final_transcript_parts = '';
+    let new_interim_transcript_part = '';
 
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    if (event.results[i].isFinal) {
-                        // 將最終確認的片段加入到 accumulatedFinalTranscript
-                        accumulatedFinalTranscript += event.results[i][0].transcript + ' ';
-                    } else {
-                        // 將非最終的片段串接起來，形成當前的 interim 顯示
-                        interim_transcript_for_display += event.results[i][0].transcript;
-                    }
-                }
-                currentInterimTranscript = interim_transcript_for_display; // 更新當前即時文字
-                transcriptOutput.textContent = accumulatedFinalTranscript + currentInterimTranscript; // 顯示已確認的 + 即時的
-            };
+    // 遍歷所有目前收到的語音辨識結果
+    for (let i = 0; i < event.results.length; i++) {
+        const transcriptSegment = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+            new_final_transcript_parts += transcriptSegment + ' ';
+        } else {
+            // 對於 interim 結果，我們只關心最新的那一個
+            // （通常 Speech API 會把所有之前的 interim 都變成 final，只留最後一個是 interim）
+            // 簡單起見，這裡會串接所有非 final 的，但通常只有最後一段有意義
+            new_interim_transcript_part += transcriptSegment;
+        }
+    }
+
+    // 更新全局變數 accumulatedFinalTranscript，這樣在測試結束 (onend) 時能用它來計算 WPM
+    // new_final_transcript_parts 包含了所有已確認的最終片段
+    accumulatedFinalTranscript = new_final_transcript_parts.trim();
+
+    // 為了更精確地顯示當前正在辨識的 interim 文字，
+    // 我們只取 event.results 中最後一個非 final 的結果。
+    let display_interim = '';
+    if (event.results.length > 0) {
+        const lastResult = event.results[event.results.length - 1];
+        if (!lastResult.isFinal) {
+            display_interim = lastResult[0].transcript;
+        }
+    }
+    currentInterimTranscript = display_interim; // 更新全局的 currentInterimTranscript
+
+    // 更新畫面顯示：顯示所有已確認的最終片段，再加上當前最新的、未確認的片段
+    transcriptOutput.textContent = new_final_transcript_parts + display_interim;
+};
 
             recognition.onend = () => {
                 statusDiv.textContent = "Processing complete. Tap Start to try again.";
