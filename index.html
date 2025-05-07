@@ -136,11 +136,17 @@
 
         <div class="controls">
             <button id="startButton">Start Speaking</button>
+            <button id="resetButton" style="display:none;">Reset Progress</button> <!-- 新增重置按鈕 -->
+    <p>Press Space or Enter after each word.</p>
+</div>
             <button id="stopButton" disabled>Stop & Calculate</button>
         </div>
 
         <div id="status" class="status">Ready.</div>
-
+    <p>Words Per Minute: <span id="wpm">0</span></p>
+    <p>Accuracy: <span id="accuracy">0</span>%</p>
+    <p>Total Words Spoken: <span id="totalWordsSpoken">0</span></p>
+    <button id="clearHistoryButton">Clear All History</button> <!-- 新增清除歷史按鈕 -->
         <div class="transcript-container">
             <strong>Recognized Text (confirms audio is received):</strong>
             <p id="transcriptOutput">...</p>
