@@ -1,17 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Speaking Speed Test</title>
+    <style>
+        /* Basic reset and box-sizing */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start; /* Align to top for better mobile view with keyboard */
+            min-height: 100vh; /* Full viewport height */
+            background-color: #f0f2f5;
+            padding: 20px 10px; /* More padding on sides for mobile */
+            text-align: center;
+            font-size: 16px; /* Base font size for mobile readability */
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            width: 100%; /* Take full width of padded body */
+            max-width: 500px; /* Max width for larger phones/small tablets */
+        }
+        h1 {
+            color: #333;
+            font-size: 1.5em; /* Responsive font size */
+            margin-bottom: 15px;
+        }
+        .instructions {
+            margin-bottom: 20px;
+            color: #555;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+        .controls { /* Container for buttons */
+            display: flex;
+            flex-direction: column; /* Stack buttons vertically */
+            gap: 10px; /* Space between buttons */
+            margin-bottom: 20px; /* Space below controls block */
+        }
+        .controls button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 20px; /* Larger padding for easier tapping */
+            text-align: center;
+            text-decoration: none;
+            display: block; /* Make buttons take full available width */
+            width: 100%;
+            font-size: 1em;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background-color 0.3s;
+            font-weight: bold;
+        }
+        .controls button:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+        .controls button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        #stopButton { 
+            background-color: #dc3545;
+        }
+        #stopButton:hover:not(:disabled) {
+            background-color: #c82333;
+        }
+        .status {
+            margin-top: 20px; 
+            font-weight: bold;
+            min-height: 24px; 
+            font-size: 1em;
+        }
+        .status.listening { color: #28a745; }
+        .status.processing { color: #ffc107; }
+        .status.error { color: #dc3545; }
+
+        .transcript-container {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            min-height: 80px; 
+            max-height: 200px; 
+            overflow-y: auto; 
+            text-align: left;
+            line-height: 1.6;
+            word-break: break-word; 
+        }
+        .transcript-container strong {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 0.9em;
+        }
+        .transcript-container p {
+            font-style: italic;
+            color: #444;
+            font-size: 0.95em;
+        }
+        .results {
+            margin-top: 20px;
+            font-size: 1.1em;
+            line-height: 1.6;
+        }
+        .results span {
+            font-weight: bold;
+            color: #007bff;
+        }
+        .compatibility-notice {
+            margin-top: 25px;
+            font-size: 0.8em;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Speaking Speed Test</h1>
+
+        <div class="instructions">
+            <p>Tap "Start Speaking" and talk into your phone. Your words will appear below. Tap "Stop & Calculate" when done.</p>
+        </div>
+
+        <div class="controls">
+            <button id="startButton">Start Speaking</button>
+            <button id="stopButton" disabled>Stop & Calculate</button>
+        </div>
+
+        <div id="status" class="status">Ready.</div>
+        <p>Words Per Minute: <span id="wpm">0</span></p> 
+
+        <div class="transcript-container">
+            <strong>Recognized Text:</strong>
+            <p id="transcriptOutput">...</p>
+        </div>
+
+        <div id="results" class="results"></div>
+
+        <div class="compatibility-notice">
+            Uses your browser's Speech Recognition. Works best in Chrome (Android) or Safari (iOS). Grant microphone access.
+        </div>
+    </div>
+
     <script>
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
         const statusDiv = document.getElementById('status');
         const transcriptOutput = document.getElementById('transcriptOutput');
         const resultsDiv = document.getElementById('results');
-        const wpmSpan = document.getElementById('wpm');
+        const wpmSpan = document.getElementById('wpm'); 
 
         let recognition;
         let startTime;
-        let final_transcript_segments = [];
-        let accumulatedFinalTranscript = '';
-        let currentInterimTranscript = '';
-        let isRecognizing = false; // Flag to track recognition state
+        // final_transcript_segments is less critical in this revised logic
+        // let final_transcript_segments = []; 
+        let accumulatedFinalTranscript = ''; 
+        let currentInterimTranscript = ''; 
+        let isRecognizing = false;
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -27,7 +186,6 @@
             recognition.lang = 'en-US';
 
             recognition.onstart = () => {
-                console.log("Recognition started");
                 isRecognizing = true;
                 statusDiv.textContent = "Listening... Speak now!";
                 statusDiv.className = 'status listening';
@@ -36,122 +194,110 @@
                 resultsDiv.textContent = '';
                 transcriptOutput.textContent = '...';
                 wpmSpan.textContent = '0';
-                accumulatedFinalTranscript = '';
+
+                accumulatedFinalTranscript = ''; // Crucial reset
                 currentInterimTranscript = '';
-                final_transcript_segments = [];
+                // final_transcript_segments = []; 
                 startTime = new Date();
-                console.log("Start time:", startTime);
+                console.log("Recognition started, accumulatedFinalTranscript reset. Start time:", startTime);
             };
 
             recognition.onresult = (event) => {
-                if (!isRecognizing) return; // Prevent processing if recognition has been stopped
-
-                console.log("onresult event:", event);
+                if (!isRecognizing) {
+                    console.log("onresult fired but not recognizing, ignoring.");
+                    return;
+                }
+                console.log("onresult triggered. Results length:", event.results.length, "Result index:", event.resultIndex);
                 let latest_interim_for_display = '';
+                let new_final_text_this_event = ''; // Text finalized in *this* specific event
 
-                // It's safer to rebuild final_transcript_segments each time
-                // to handle cases where the API might revise earlier segments.
-                let current_final_segments_map = new Map();
-
-                for (let i = 0; i < event.results.length; ++i) {
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
                     const result = event.results[i];
-                    const transcript_from_result = result[0].transcript.trim();
+                    const transcript_segment = result[0].transcript;
 
                     if (result.isFinal) {
-                        // Use resultIndex as a key to ensure each segment is stored once
-                        // This assumes resultIndex is consistent for a given utterance segment
-                        current_final_segments_map.set(i, transcript_from_result);
-                        console.log(`Segment ${i} (final): ${transcript_from_result}`);
+                        new_final_text_this_event += transcript_segment.trim() + ' '; 
+                        console.log(`Segment ${i} (final): ${transcript_segment.trim()}`);
                     } else {
-                        if (i === event.results.length - 1) { // Only the last one is truly interim for display
-                            latest_interim_for_display = transcript_from_result;
-                            console.log(`Segment ${i} (interim): ${latest_interim_for_display}`);
-                        }
+                        latest_interim_for_display += transcript_segment; // Concatenate all non-final for display
+                        // console.log(`Segment ${i} (interim): ${transcript_segment}`); // Can be very noisy
                     }
                 }
+
+                if (new_final_text_this_event.trim().length > 0) {
+                     // Append new final text to existing accumulated text
+                     accumulatedFinalTranscript = (accumulatedFinalTranscript + ' ' + new_final_text_this_event.trim()).trim();
+                }
                 
-                // Sort map keys (indices) to ensure correct order before joining
-                final_transcript_segments = Array.from(current_final_segments_map.keys())
-                                              .sort((a, b) => a - b)
-                                              .map(key => current_final_segments_map.get(key));
+                currentInterimTranscript = latest_interim_for_display.trim();
+                // console.log("Current accumulatedFinalTranscript:", accumulatedFinalTranscript); // Log after potential update
+                // console.log("Current currentInterimTranscript:", currentInterimTranscript);
 
-                const complete_final_text = final_transcript_segments.join(' ');
-                console.log("Current complete_final_text:", complete_final_text);
-
-                accumulatedFinalTranscript = complete_final_text;
-                currentInterimTranscript = latest_interim_for_display;
-
-                transcriptOutput.textContent = complete_final_text +
-                    (currentInterimTranscript ? (complete_final_text ? ' ' : '') + currentInterimTranscript : '');
+                transcriptOutput.textContent = accumulatedFinalTranscript + 
+                    (currentInterimTranscript ? (accumulatedFinalTranscript ? ' ' : '') + currentInterimTranscript : '');
             };
 
             recognition.onend = () => {
-                console.log("Recognition ended");
-                isRecognizing = false; // Mark as not recognizing
+                isRecognizing = false;
+                console.log("Recognition ended.");
                 statusDiv.textContent = "Processing complete. Tap Start to try again.";
                 statusDiv.className = 'status';
                 startButton.disabled = false;
                 stopButton.disabled = true;
 
-                // Give a very brief moment for any final onresult to potentially process
-                // This is a bit of a hack, ideally onend implies all results are in.
-                // setTimeout(() => { 
-                    let textForCalculation = accumulatedFinalTranscript.trim();
-                    console.log("Final accumulatedFinalTranscript for calculation:", textForCalculation);
-                    console.log("CurrentInterimTranscript at onend:", currentInterimTranscript.trim());
+                let textForCalculation = accumulatedFinalTranscript.trim();
+                console.log("Final text for calculation (from accumulated):", textForCalculation);
+                
+                if (textForCalculation === '' && currentInterimTranscript.trim().length > 3) { // Short check for interim
+                     // console.warn("Fallback: Potentially using interim transcript for calculation:", currentInterimTranscript.trim());
+                     // textForCalculation = currentInterimTranscript.trim(); // Keep this commented unless sure
+                }
 
-                    // If no final text, but there was a robust interim when stopped.
-                    // Be cautious with this, as interim can be unreliable.
-                    if (textForCalculation === '' && currentInterimTranscript.trim().length > 0) {
-                        console.log("Using currentInterimTranscript as fallback for calculation.");
-                        // textForCalculation = currentInterimTranscript.trim(); // Decide if you want this fallback
-                    }
+                transcriptOutput.textContent = textForCalculation || 'No speech detected.';
 
-                    transcriptOutput.textContent = textForCalculation || 'No speech detected.';
+                if (textForCalculation === '') {
+                     resultsDiv.innerHTML = "No clear speech was finalized. Try speaking clearly.";
+                     wpmSpan.textContent = '0';
+                     return;
+                }
 
-                    if (textForCalculation === '') {
-                        resultsDiv.innerHTML = "No clear speech was finalized. <br>Try speaking clearly.";
-                        wpmSpan.textContent = '0';
-                        return;
-                    }
+                const endTime = new Date();
+                const timeDiffSeconds = (endTime - startTime) / 1000;
+                console.log("Start time:", startTime, "End time:", endTime, "Diff (s):", timeDiffSeconds);
 
-                    const endTime = new Date();
-                    console.log("End time:", endTime);
-                    const timeDiffSeconds = (endTime - startTime) / 1000;
-                    console.log("Time difference (seconds):", timeDiffSeconds);
+                if (timeDiffSeconds < 1.0) { // Min duration 1.0 second
+                    resultsDiv.innerHTML = `Duration ${timeDiffSeconds.toFixed(2)}s. Too short for reliable WPM. <br>Recognized: "${textForCalculation}"`;
+                    wpmSpan.textContent = '0';
+                    console.log("Duration too short:", timeDiffSeconds);
+                    return;
+                }
 
-                    // Add a stricter minimum duration for WPM calculation
-                    if (timeDiffSeconds < 0.8) { // Increased minimum duration
-                        resultsDiv.innerHTML = `Duration ${timeDiffSeconds.toFixed(2)}s. Too short for reliable WPM. <br>Recognized: "${textForCalculation}"`;
-                        wpmSpan.textContent = '0';
-                        console.log("Duration too short for WPM calculation.");
-                        return;
-                    }
+                const words = textForCalculation.split(/\s+/).filter(word => word && word.length > 0);
+                const wordCount = words.length;
+                console.log("Words for calculation:", words);
+                console.log("Word count:", wordCount);
 
-                    const words = textForCalculation.split(/\s+/).filter(word => word.length > 0);
-                    const wordCount = words.length;
-                    console.log("Word count:", wordCount);
-
-                    if (wordCount > 0) {
-                        const calculatedWpm = Math.round((wordCount / timeDiffSeconds) * 60);
-                        wpmSpan.textContent = calculatedWpm;
-                        resultsDiv.innerHTML = `
-                            Duration: <span>${timeDiffSeconds.toFixed(2)}s</span><br>
-                            Word Count: <span>${wordCount}</span><br>
-                            Your Speed: <span>${calculatedWpm} WPM</span>
-                        `;
-                        console.log("Calculated WPM:", calculatedWpm);
-                    } else {
-                        wpmSpan.textContent = '0';
-                        resultsDiv.innerHTML = "No words clearly finalized for calculation.";
-                        console.log("No words for WPM calculation.");
-                    }
-                // }, 100); // Delay for setTimeout, if used
+                if (wordCount > 0) {
+                    const calculatedWpm = Math.round((wordCount / timeDiffSeconds) * 60);
+                    wpmSpan.textContent = calculatedWpm;
+                    resultsDiv.innerHTML = `
+                        Duration: <span>${timeDiffSeconds.toFixed(2)}s</span><br>
+                        Word Count: <span>${wordCount}</span><br>
+                        Your Speed: <span>${calculatedWpm} WPM</span>
+                    `;
+                    console.log("Calculated WPM:", calculatedWpm);
+                } else {
+                    wpmSpan.textContent = '0';
+                    resultsDiv.innerHTML = "No words clearly finalized for calculation.";
+                }
+                // Reset for next run
+                accumulatedFinalTranscript = '';
+                currentInterimTranscript = '';
             };
 
             recognition.onerror = (event) => {
-                console.error("Recognition error:", event);
                 isRecognizing = false;
+                console.error("Recognition error:", event);
                 let errorMessage = "Error: " + event.error;
                 if (event.error === 'no-speech') {
                     errorMessage = "No speech detected. Check microphone.";
@@ -166,27 +312,24 @@
                 stopButton.disabled = true;
                 accumulatedFinalTranscript = '';
                 currentInterimTranscript = '';
-                final_transcript_segments = [];
                 wpmSpan.textContent = '0';
             };
         }
 
         startButton.addEventListener('click', () => {
             if (!recognition) return;
-            if (isRecognizing) { // If already recognizing, stop it first
+            if (isRecognizing) {
                 console.log("Start clicked while recognizing, stopping first.");
-                recognition.stop(); // This should trigger onend, then user can click start again
+                recognition.stop(); 
                 return;
             }
             try {
-                console.log("Attempting to start recognition...");
-                // Reset states explicitly here too
-                accumulatedFinalTranscript = '';
+                console.log("Attempting to start recognition via button click...");
+                accumulatedFinalTranscript = ''; 
                 currentInterimTranscript = '';
                 transcriptOutput.textContent = '...';
                 resultsDiv.textContent = '';
                 wpmSpan.textContent = '0';
-                final_transcript_segments = [];
                 
                 recognition.start();
             } catch(e) {
@@ -197,9 +340,9 @@
                 } else {
                     statusDiv.textContent = "Error starting. Check mic permission.";
                 }
-                startButton.disabled = false;
+                startButton.disabled = false; 
                 stopButton.disabled = true;
-                isRecognizing = false; // Ensure flag is reset
+                isRecognizing = false; 
             }
         });
 
