@@ -43,6 +43,12 @@
             font-size: 0.9em;
             line-height: 1.5;
         }
+        .controls { /* Container for buttons */
+            display: flex;
+            flex-direction: column; /* Stack buttons vertically */
+            gap: 10px; /* Space between buttons */
+            margin-bottom: 20px; /* Space below controls block */
+        }
         .controls button {
             background-color: #007bff;
             color: white;
@@ -53,16 +59,14 @@
             display: block; /* Make buttons take full available width */
             width: 100%;
             font-size: 1em;
-            margin-bottom: 10px; /* Space between stacked buttons */
+            /* margin-bottom: 10px; Removed as gap is used in .controls */
             cursor: pointer;
             border-radius: 8px;
             transition: background-color 0.3s;
             font-weight: bold;
         }
-        .controls button:last-child {
-            margin-bottom: 0;
-        }
-        .controls button:hover {
+        /* .controls button:last-child { margin-bottom: 0; } Removed */
+        .controls button:hover:not(:disabled) {
             background-color: #0056b3;
         }
         .controls button:disabled {
@@ -70,14 +74,14 @@
             cursor: not-allowed;
             opacity: 0.7;
         }
-        #stopButton {
+        #stopButton { /* Specific style for stop button if needed, ensure it's inside .controls */
             background-color: #dc3545;
         }
         #stopButton:hover:not(:disabled) {
             background-color: #c82333;
         }
         .status {
-            margin-top: 20px;
+            margin-top: 20px; /* Adjusted if .controls has margin-bottom */
             font-weight: bold;
             min-height: 24px; /* To prevent layout shifts */
             font-size: 1em;
@@ -124,6 +128,7 @@
             font-size: 0.8em;
             color: #6c757d;
         }
+        /* Removed unused HTML elements related elements, can be added back if needed */
     </style>
 </head>
 <body>
@@ -136,19 +141,15 @@
 
         <div class="controls">
             <button id="startButton">Start Speaking</button>
-            <button id="resetButton" style="display:none;">Reset Progress</button> <!-- 新增重置按鈕 -->
-   
-</div>
             <button id="stopButton" disabled>Stop & Calculate</button>
+            <!-- Removed resetButton, TotalWordsSpoken, Accuracy, clearHistoryButton as they are not used in this version -->
         </div>
 
         <div id="status" class="status">Ready.</div>
-    <p>Words Per Minute: <span id="wpm">0</span></p>
-    <p>Accuracy: <span id="accuracy">0</span>%</p>
-    <p>Total Words Spoken: <span id="totalWordsSpoken">0</span></p>
-    <button id="clearHistoryButton">Clear All History</button> <!-- 新增清除歷史按鈕 -->
+        <p>Words Per Minute: <span id="wpm">0</span></p> <!-- WPM display will be updated by JS if logic for it is complete -->
+
         <div class="transcript-container">
-            <strong>Recognized Text (confirms audio is received):</strong>
+            <strong>Recognized Text:</strong>
             <p id="transcriptOutput">...</p>
         </div>
 
@@ -160,19 +161,21 @@
     </div>
 
     <script>
-const startButton = document.getElementById('startButton');
+        const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
         const statusDiv = document.getElementById('status');
         const transcriptOutput = document.getElementById('transcriptOutput');
         const resultsDiv = document.getElementById('results');
+        const wpmSpan = document.getElementById('wpm'); // Get the WPM span
 
         let recognition;
         let startTime;
-        let final_transcript_segments = []; // 只定義一次
-        let accumulatedFinalTranscript = ''; 
-        let currentInterimTranscript = ''; 
+        let final_transcript_segments = []; // Stores final transcript parts
+        let accumulatedFinalTranscript = ''; // For final calculation
+        let currentInterimTranscript = ''; // For display
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
         if (!SpeechRecognition) {
             statusDiv.textContent = "Speech Recognition not supported. Try Chrome or Safari.";
             statusDiv.className = 'status error';
@@ -180,9 +183,9 @@ const startButton = document.getElementById('startButton');
             stopButton.disabled = true;
         } else {
             recognition = new SpeechRecognition();
-            recognition.continuous = true; 
-            recognition.interimResults = true; 
-            recognition.lang = 'en-US';
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US'; // You can change language if needed
 
             recognition.onstart = () => {
                 statusDiv.textContent = "Listening... Speak now!";
@@ -191,9 +194,11 @@ const startButton = document.getElementById('startButton');
                 stopButton.disabled = false;
                 resultsDiv.textContent = '';
                 transcriptOutput.textContent = '...';
-                accumulatedFinalTranscript = ''; 
-                currentInterimTranscript = ''; 
-                final_transcript_segments = []; // 重置 final 片段陣列
+                wpmSpan.textContent = '0'; // Reset WPM display
+
+                accumulatedFinalTranscript = '';
+                currentInterimTranscript = '';
+                final_transcript_segments = []; // Crucial reset
                 startTime = new Date();
             };
 
@@ -205,18 +210,25 @@ const startButton = document.getElementById('startButton');
                     const transcript_from_result = result[0].transcript;
 
                     if (result.isFinal) {
+                        // Update the segment at the specific index
                         final_transcript_segments[i] = transcript_from_result.trim();
                     } else {
+                        // Only the last interim result is usually needed for display
                         if (i === event.results.length - 1) {
                             latest_interim_for_display = transcript_from_result;
                         }
                     }
                 }
 
+                // Reconstruct final text from segments, filtering out any empty/undefined ones
                 const complete_final_text = final_transcript_segments.filter(segment => segment).join(' ');
+
                 accumulatedFinalTranscript = complete_final_text;
                 currentInterimTranscript = latest_interim_for_display.trim();
-                transcriptOutput.textContent = complete_final_text + (latest_interim_for_display.trim() ? ' ' + latest_interim_for_display.trim() : '');
+
+                // Update display
+                transcriptOutput.textContent = complete_final_text + 
+                    (currentInterimTranscript ? (complete_final_text ? ' ' : '') + currentInterimTranscript : '');
             };
 
             recognition.onend = () => {
@@ -226,43 +238,48 @@ const startButton = document.getElementById('startButton');
                 stopButton.disabled = true;
 
                 let textForCalculation = accumulatedFinalTranscript.trim();
+                transcriptOutput.textContent = textForCalculation || currentInterimTranscript || 'No speech detected.'; // Show final text
 
+                if (textForCalculation === '' && currentInterimTranscript.trim()) {
+                    // Optional: If no final text but there was interim text when stopped,
+                    // you might decide to use interim text. For now, we prioritize final text.
+                    // textForCalculation = currentInterimTranscript.trim();
+                }
+                
                 if (textForCalculation === '') {
                      resultsDiv.innerHTML = "No clear speech was finalized for calculation. <br>Ensure you speak clearly and allow time for finalization.";
-                     transcriptOutput.textContent = accumulatedFinalTranscript || currentInterimTranscript || 'No speech detected.';
+                     wpmSpan.textContent = '0';
                      return;
                 }
-
-                transcriptOutput.textContent = textForCalculation; 
 
                 const endTime = new Date();
                 const timeDiffSeconds = (endTime - startTime) / 1000;
 
                 if (timeDiffSeconds < 0.5 && textForCalculation.split(/\s+/).filter(word => word.length > 0).length <= 3) {
                     resultsDiv.innerHTML = `Spoke for ${timeDiffSeconds.toFixed(2)}s. Too short for reliable WPM. <br>Recognized: "${textForCalculation}"`;
+                    wpmSpan.textContent = '0';
                     return;
                 }
 
-                const words = textForCalculation.trim().split(/\s+/).filter(word => word.length > 0);
+                const words = textForCalculation.split(/\s+/).filter(word => word.length > 0);
                 const wordCount = words.length;
 
-                if (wordCount > 0 && timeDiffSeconds > 0.2) { 
-                    const wpm = Math.round((wordCount / timeDiffSeconds) * 60);
+                if (wordCount > 0 && timeDiffSeconds > 0.2) {
+                    const calculatedWpm = Math.round((wordCount / timeDiffSeconds) * 60);
+                    wpmSpan.textContent = calculatedWpm; // Update WPM span
                     resultsDiv.innerHTML = `
                         Duration: <span>${timeDiffSeconds.toFixed(2)}s</span><br>
                         Word Count: <span>${wordCount}</span><br>
-                        Your Speed: <span>${wpm} WPM</span>
+                        Your Speed: <span>${calculatedWpm} WPM</span>
                     `;
-                } else if (wordCount === 0) {
-                     resultsDiv.innerHTML = "No words were clearly finalized for calculation.";
                 } else {
-                    resultsDiv.innerHTML = "Not enough data for WPM (duration too short or no clear words finalized).";
+                    wpmSpan.textContent = '0';
+                    if (wordCount === 0) {
+                        resultsDiv.innerHTML = "No words were clearly finalized for calculation.";
+                    } else {
+                        resultsDiv.innerHTML = "Not enough data for WPM (duration too short or no clear words finalized).";
+                    }
                 }
-                
-                // 在 onend 的最後重置，確保下次 start 是乾淨的
-                accumulatedFinalTranscript = '';
-                currentInterimTranscript = '';
-                // final_transcript_segments 已經在 onstart 時重置了
             };
 
             recognition.onerror = (event) => {
@@ -278,32 +295,39 @@ const startButton = document.getElementById('startButton');
                 statusDiv.className = 'status error';
                 startButton.disabled = false;
                 stopButton.disabled = true;
+
+                // Reset states on error
                 accumulatedFinalTranscript = '';
                 currentInterimTranscript = '';
-                final_transcript_segments = []; // 也在此處重置，以防錯誤後狀態不一致
+                final_transcript_segments = [];
+                wpmSpan.textContent = '0';
             };
         }
 
         startButton.addEventListener('click', () => {
             if (recognition) {
                 try {
-                    // 重置狀態變數 (在 onstart 中已經有重置，這裡可選，但確保萬無一失)
+                    // Ensure states are clean before starting
                     accumulatedFinalTranscript = '';
                     currentInterimTranscript = '';
                     transcriptOutput.textContent = '...';
                     resultsDiv.textContent = '';
-                    final_transcript_segments = []; // 確保在 start 時也是乾淨的
-
+                    wpmSpan.textContent = '0';
+                    final_transcript_segments = [];
+                    
                     recognition.start();
                 } catch(e) {
                     console.error("Error starting recognition:", e);
+                    statusDiv.className = 'status error';
                     if (e.name === 'InvalidStateError') {
-                        statusDiv.textContent = "Recognition already active. Please wait or refresh.";
+                        // This error means recognition.start() was called when it was already started.
+                        // Attempt to stop it first, then allow user to try again.
+                        statusDiv.textContent = "Recognition issue. Please wait or try stopping first.";
+                        try { recognition.stop(); } catch(stopErr) {} // Attempt to stop
                     } else {
                         statusDiv.textContent = "Error starting. Refresh or check mic permission.";
                     }
-                    statusDiv.className = 'status error';
-                    startButton.disabled = false; 
+                    startButton.disabled = false; // Re-enable start if it failed
                     stopButton.disabled = true;
                 }
             }
@@ -311,7 +335,7 @@ const startButton = document.getElementById('startButton');
 
         stopButton.addEventListener('click', () => {
             if (recognition) {
-                recognition.stop(); 
+                recognition.stop(); // This will trigger 'onend'
                 statusDiv.textContent = "Stopping and calculating...";
                 statusDiv.className = 'status processing';
             }
