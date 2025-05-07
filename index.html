@@ -167,7 +167,9 @@
         const resultsDiv = document.getElementById('results');
 
         let recognition;
+        let final_transcript_segments = [];
         let startTime;
+        let final_transcript_segments = [];
         let accumulatedFinalTranscript = ''; // 用來儲存所有最終確認的文字片段
         let currentInterimTranscript = ''; // 用來顯示當前即時辨識的文字
 
@@ -192,10 +194,43 @@
                 transcriptOutput.textContent = '...';
                 accumulatedFinalTranscript = ''; // 重置已確認的文字
                 currentInterimTranscript = ''; // 重置即時文字
+                final_transcript_segments = []; // 新增：重置 final 片段陣列
                 startTime = new Date();
             };
 
             recognition.onresult = (event) => {
+                let latest_interim_for_display = '';
+
+    // 遍歷所有收到的結果
+    for (let i = 0; i < event.results.length; ++i) {
+        const result = event.results[i];
+        const transcript_from_result = result[0].transcript;
+
+        if (result.isFinal) {
+            // 如果是 final 結果，用它更新/設置 final_transcript_segments 陣列中對應索引的內容
+            // .trim() 確保移除前後多餘空格，避免累計空格問題
+            final_transcript_segments[i] = transcript_from_result.trim();
+        } else {
+            // 如果不是 final，我們只關心最後一個 interim result 用於即時顯示
+            if (i === event.results.length - 1) {
+                latest_interim_for_display = transcript_from_result;
+            }
+        }
+    }
+
+    // 從 final_transcript_segments 陣列構建完整的 final 文本字串
+    // .filter(segment => segment) 會移除陣列中可能因某些索引未被賦值而產生的 undefined 或空字串
+    const complete_final_text = final_transcript_segments.filter(segment => segment).join(' ');
+
+    // 更新全局變量，供 onend 事件計算 WPM 使用
+    accumulatedFinalTranscript = complete_final_text;
+    // currentInterimTranscript 更新為最新的 interim 片段 (如果有的話)
+    currentInterimTranscript = latest_interim_for_display.trim();
+
+    // 更新到畫面上顯示的文字
+    // 顯示所有已確認的 final 片段，如果後面有最新的 interim 片段，也加上去
+    transcriptOutput.textContent = complete_final_text + (latest_interim_for_display.trim() ? ' ' + latest_interim_for_display.trim() : '');
+};
     let new_final_transcript_parts = '';
     let new_interim_transcript_part = '';
 
