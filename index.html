@@ -17,24 +17,24 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-start; /* Align to top for better mobile view with keyboard */
-            min-height: 100vh; /* Full viewport height */
+            justify-content: flex-start; 
+            min-height: 100vh; 
             background-color: #f0f2f5;
-            padding: 20px 10px; /* More padding on sides for mobile */
+            padding: 20px 10px; 
             text-align: center;
-            font-size: 16px; /* Base font size for mobile readability */
+            font-size: 16px; 
         }
         .container {
             background-color: #fff;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            width: 100%; /* Take full width of padded body */
-            max-width: 500px; /* Max width for larger phones/small tablets */
+            width: 100%; 
+            max-width: 500px; 
         }
         h1 {
             color: #333;
-            font-size: 1.5em; /* Responsive font size */
+            font-size: 1.5em; 
             margin-bottom: 15px;
         }
         .instructions {
@@ -43,20 +43,20 @@
             font-size: 0.9em;
             line-height: 1.5;
         }
-        .controls { /* Container for buttons */
+        .controls { 
             display: flex;
-            flex-direction: column; /* Stack buttons vertically */
-            gap: 10px; /* Space between buttons */
-            margin-bottom: 20px; /* Space below controls block */
+            flex-direction: column; 
+            gap: 10px; 
+            margin-bottom: 20px; 
         }
         .controls button {
             background-color: #007bff;
             color: white;
             border: none;
-            padding: 15px 20px; /* Larger padding for easier tapping */
+            padding: 15px 20px; 
             text-align: center;
             text-decoration: none;
-            display: block; /* Make buttons take full available width */
+            display: block; 
             width: 100%;
             font-size: 1em;
             cursor: pointer;
@@ -125,6 +125,35 @@
             margin-top: 25px;
             font-size: 0.8em;
             color: #6c757d;
+            margin-bottom: 20px; /* Added margin for spacing before debug log */
+        }
+        /* Styles for on-screen debug log */
+        #debugLogContainer {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px dashed #ccc;
+            background-color: #f8f8f8;
+            text-align: left;
+            font-size: 0.8em;
+            max-height: 300px;
+            overflow-y: auto;
+            line-height: 1.4;
+            word-break: break-all;
+        }
+        #debugLogContainer h3 {
+            margin-top: 0;
+            font-size: 1.1em;
+        }
+        #debugLogContainer p {
+            margin: 2px 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 2px;
+        }
+        #clearLogButton {
+            margin-top: 10px;
+            padding: 8px 12px;
+            font-size: 0.9em;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -154,6 +183,13 @@
         <div class="compatibility-notice">
             Uses your browser's Speech Recognition. Works best in Chrome (Android) or Safari (iOS). Grant microphone access.
         </div>
+
+        <!-- On-screen Debug Log Area -->
+        <button id="clearLogButton">Clear On-Screen Log</button>
+        <div id="debugLogContainer">
+            <h3>Debug Log:</h3>
+            <!-- Log messages will be appended here -->
+        </div>
     </div>
 
     <script>
@@ -163,11 +199,34 @@
         const transcriptOutput = document.getElementById('transcriptOutput');
         const resultsDiv = document.getElementById('results');
         const wpmSpan = document.getElementById('wpm'); 
+        const debugLogContainer = document.getElementById('debugLogContainer');
+        const clearLogButton = document.getElementById('clearLogButton');
+
+        // Function to log messages to the on-screen div
+        function logToScreen(message) {
+            const logEntry = document.createElement('p');
+            const now = new Date();
+            const timeString = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}.${String(now.getMilliseconds()).padStart(3, '0')}`;
+            logEntry.textContent = `[${timeString}] ${message}`;
+            // Prepend to see latest logs first
+            if (debugLogContainer.children.length > 1) { // first child is H3
+                debugLogContainer.insertBefore(logEntry, debugLogContainer.children[1]);
+            } else {
+                debugLogContainer.appendChild(logEntry);
+            }
+            // Also log to console for desktop debugging
+            console.log(message);
+        }
+
+        clearLogButton.addEventListener('click', () => {
+            // Remove all <p> elements from log container
+            const logEntries = debugLogContainer.querySelectorAll('p');
+            logEntries.forEach(entry => entry.remove());
+            logToScreen("On-screen log cleared.");
+        });
 
         let recognition;
         let startTime;
-        // final_transcript_segments is less critical in this revised logic
-        // let final_transcript_segments = []; 
         let accumulatedFinalTranscript = ''; 
         let currentInterimTranscript = ''; 
         let isRecognizing = false;
@@ -175,10 +234,12 @@
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
         if (!SpeechRecognition) {
-            statusDiv.textContent = "Speech Recognition not supported. Try Chrome or Safari.";
+            const msg = "Speech Recognition not supported. Try Chrome or Safari.";
+            statusDiv.textContent = msg;
             statusDiv.className = 'status error';
             startButton.disabled = true;
             stopButton.disabled = true;
+            logToScreen(msg);
         } else {
             recognition = new SpeechRecognition();
             recognition.continuous = true;
@@ -187,6 +248,7 @@
 
             recognition.onstart = () => {
                 isRecognizing = true;
+                const msg = "Recognition started, accumulatedFinalTranscript reset.";
                 statusDiv.textContent = "Listening... Speak now!";
                 statusDiv.className = 'status listening';
                 startButton.disabled = true;
@@ -194,22 +256,20 @@
                 resultsDiv.textContent = '';
                 transcriptOutput.textContent = '...';
                 wpmSpan.textContent = '0';
-
-                accumulatedFinalTranscript = ''; // Crucial reset
+                accumulatedFinalTranscript = ''; 
                 currentInterimTranscript = '';
-                // final_transcript_segments = []; 
                 startTime = new Date();
-                console.log("Recognition started, accumulatedFinalTranscript reset. Start time:", startTime);
+                logToScreen(`${msg} Start time: ${startTime.toISOString()}`);
             };
 
             recognition.onresult = (event) => {
                 if (!isRecognizing) {
-                    console.log("onresult fired but not recognizing, ignoring.");
+                    logToScreen("onresult fired but not recognizing, ignoring.");
                     return;
                 }
-                console.log("onresult triggered. Results length:", event.results.length, "Result index:", event.resultIndex);
+                logToScreen(`onresult triggered. Results length: ${event.results.length}, Result index: ${event.resultIndex}`);
                 let latest_interim_for_display = '';
-                let new_final_text_this_event = ''; // Text finalized in *this* specific event
+                let new_final_text_this_event = ''; 
 
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     const result = event.results[i];
@@ -217,40 +277,41 @@
 
                     if (result.isFinal) {
                         new_final_text_this_event += transcript_segment.trim() + ' '; 
-                        console.log(`Segment ${i} (final): ${transcript_segment.trim()}`);
+                        logToScreen(`Segment ${i} (final): ${transcript_segment.trim()}`);
                     } else {
-                        latest_interim_for_display += transcript_segment; // Concatenate all non-final for display
-                        // console.log(`Segment ${i} (interim): ${transcript_segment}`); // Can be very noisy
+                        latest_interim_for_display += transcript_segment; 
                     }
                 }
+                // Log interim only once per event if it changes to reduce noise
+                if (latest_interim_for_display.trim() !== currentInterimTranscript && latest_interim_for_display.trim() !== "") {
+                     logToScreen(`Interim display update: ${latest_interim_for_display.trim()}`);
+                }
+
 
                 if (new_final_text_this_event.trim().length > 0) {
-                     // Append new final text to existing accumulated text
                      accumulatedFinalTranscript = (accumulatedFinalTranscript + ' ' + new_final_text_this_event.trim()).trim();
+                     logToScreen(`Updated accumulatedFinalTranscript: "${accumulatedFinalTranscript}"`);
                 }
                 
                 currentInterimTranscript = latest_interim_for_display.trim();
-                // console.log("Current accumulatedFinalTranscript:", accumulatedFinalTranscript); // Log after potential update
-                // console.log("Current currentInterimTranscript:", currentInterimTranscript);
-
+                
                 transcriptOutput.textContent = accumulatedFinalTranscript + 
                     (currentInterimTranscript ? (accumulatedFinalTranscript ? ' ' : '') + currentInterimTranscript : '');
             };
 
             recognition.onend = () => {
                 isRecognizing = false;
-                console.log("Recognition ended.");
+                logToScreen("Recognition ended.");
                 statusDiv.textContent = "Processing complete. Tap Start to try again.";
                 statusDiv.className = 'status';
                 startButton.disabled = false;
                 stopButton.disabled = true;
 
                 let textForCalculation = accumulatedFinalTranscript.trim();
-                console.log("Final text for calculation (from accumulated):", textForCalculation);
+                logToScreen(`Final text for calculation: "${textForCalculation}"`);
                 
-                if (textForCalculation === '' && currentInterimTranscript.trim().length > 3) { // Short check for interim
-                     // console.warn("Fallback: Potentially using interim transcript for calculation:", currentInterimTranscript.trim());
-                     // textForCalculation = currentInterimTranscript.trim(); // Keep this commented unless sure
+                if (textForCalculation === '' && currentInterimTranscript.trim().length > 3) { 
+                     logToScreen(`WARN: Fallback considered for interim: "${currentInterimTranscript.trim()}" (Not used by default)`);
                 }
 
                 transcriptOutput.textContent = textForCalculation || 'No speech detected.';
@@ -258,24 +319,25 @@
                 if (textForCalculation === '') {
                      resultsDiv.innerHTML = "No clear speech was finalized. Try speaking clearly.";
                      wpmSpan.textContent = '0';
+                     logToScreen("No text for WPM calc.");
                      return;
                 }
 
                 const endTime = new Date();
                 const timeDiffSeconds = (endTime - startTime) / 1000;
-                console.log("Start time:", startTime, "End time:", endTime, "Diff (s):", timeDiffSeconds);
+                logToScreen(`Start time: ${startTime.toISOString()}, End time: ${endTime.toISOString()}, Diff (s): ${timeDiffSeconds.toFixed(3)}`);
 
-                if (timeDiffSeconds < 1.0) { // Min duration 1.0 second
+                if (timeDiffSeconds < 1.0) { 
                     resultsDiv.innerHTML = `Duration ${timeDiffSeconds.toFixed(2)}s. Too short for reliable WPM. <br>Recognized: "${textForCalculation}"`;
                     wpmSpan.textContent = '0';
-                    console.log("Duration too short:", timeDiffSeconds);
+                    logToScreen(`Duration too short: ${timeDiffSeconds.toFixed(3)}s`);
                     return;
                 }
 
                 const words = textForCalculation.split(/\s+/).filter(word => word && word.length > 0);
                 const wordCount = words.length;
-                console.log("Words for calculation:", words);
-                console.log("Word count:", wordCount);
+                logToScreen(`Words for calculation: [${words.join(', ')}]`);
+                logToScreen(`Word count: ${wordCount}`);
 
                 if (wordCount > 0) {
                     const calculatedWpm = Math.round((wordCount / timeDiffSeconds) * 60);
@@ -285,28 +347,31 @@
                         Word Count: <span>${wordCount}</span><br>
                         Your Speed: <span>${calculatedWpm} WPM</span>
                     `;
-                    console.log("Calculated WPM:", calculatedWpm);
+                    logToScreen(`Calculated WPM: ${calculatedWpm}`);
                 } else {
                     wpmSpan.textContent = '0';
                     resultsDiv.innerHTML = "No words clearly finalized for calculation.";
+                    logToScreen("No words counted for WPM.");
                 }
-                // Reset for next run
                 accumulatedFinalTranscript = '';
                 currentInterimTranscript = '';
             };
 
             recognition.onerror = (event) => {
                 isRecognizing = false;
-                console.error("Recognition error:", event);
-                let errorMessage = "Error: " + event.error;
+                const errMsg = `Recognition error: ${event.error} - ${event.message || '(no message)'}`;
+                logToScreen(errMsg);
+                console.error("Full error object:", event); // For desktop
+                
+                let displayMessage = "Error: " + event.error;
                 if (event.error === 'no-speech') {
-                    errorMessage = "No speech detected. Check microphone.";
+                    displayMessage = "No speech detected. Check microphone.";
                 } else if (event.error === 'audio-capture') {
-                    errorMessage = "Mic capture failed. Ensure it's not in use.";
+                    displayMessage = "Mic capture failed. Ensure it's not in use.";
                 } else if (event.error === 'not-allowed') {
-                    errorMessage = "Mic access denied. Please allow in settings.";
+                    displayMessage = "Mic access denied. Please allow in settings.";
                 }
-                statusDiv.textContent = errorMessage;
+                statusDiv.textContent = displayMessage;
                 statusDiv.className = 'status error';
                 startButton.disabled = false;
                 stopButton.disabled = true;
@@ -314,17 +379,18 @@
                 currentInterimTranscript = '';
                 wpmSpan.textContent = '0';
             };
+            logToScreen("SpeechRecognition initialized.");
         }
 
         startButton.addEventListener('click', () => {
             if (!recognition) return;
             if (isRecognizing) {
-                console.log("Start clicked while recognizing, stopping first.");
+                logToScreen("Start clicked while recognizing, stopping first.");
                 recognition.stop(); 
                 return;
             }
             try {
-                console.log("Attempting to start recognition via button click...");
+                logToScreen("Attempting to start recognition via button click...");
                 accumulatedFinalTranscript = ''; 
                 currentInterimTranscript = '';
                 transcriptOutput.textContent = '...';
@@ -333,7 +399,8 @@
                 
                 recognition.start();
             } catch(e) {
-                console.error("Error starting recognition from button:", e);
+                const errMsg = `Error starting recognition from button: ${e.name} - ${e.message}`;
+                logToScreen(errMsg);
                 statusDiv.className = 'status error';
                 if (e.name === 'InvalidStateError') {
                     statusDiv.textContent = "Recognition busy. Try again shortly.";
@@ -348,11 +415,13 @@
 
         stopButton.addEventListener('click', () => {
             if (!recognition || !isRecognizing) return;
-            console.log("Stop button clicked, stopping recognition.");
+            logToScreen("Stop button clicked, stopping recognition.");
             recognition.stop();
             statusDiv.textContent = "Stopping and calculating...";
             statusDiv.className = 'status processing';
         });
+
+        logToScreen("Script loaded. Ready.");
     </script>
 </body>
 </html>
