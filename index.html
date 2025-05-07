@@ -160,18 +160,17 @@
     </div>
 
     <script>
-               const startButton = document.getElementById('startButton');
+const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
         const statusDiv = document.getElementById('status');
         const transcriptOutput = document.getElementById('transcriptOutput');
         const resultsDiv = document.getElementById('results');
 
         let recognition;
-        let final_transcript_segments = [];
         let startTime;
-        let final_transcript_segments = [];
-        let accumulatedFinalTranscript = ''; // 用來儲存所有最終確認的文字片段
-        let currentInterimTranscript = ''; // 用來顯示當前即時辨識的文字
+        let final_transcript_segments = []; // 只定義一次
+        let accumulatedFinalTranscript = ''; 
+        let currentInterimTranscript = ''; 
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
@@ -181,8 +180,8 @@
             stopButton.disabled = true;
         } else {
             recognition = new SpeechRecognition();
-            recognition.continuous = true; // 保持聆聽直到明確停止
-            recognition.interimResults = true; // 顯示即時結果
+            recognition.continuous = true; 
+            recognition.interimResults = true; 
             recognition.lang = 'en-US';
 
             recognition.onstart = () => {
@@ -192,79 +191,33 @@
                 stopButton.disabled = false;
                 resultsDiv.textContent = '';
                 transcriptOutput.textContent = '...';
-                accumulatedFinalTranscript = ''; // 重置已確認的文字
-                currentInterimTranscript = ''; // 重置即時文字
-                final_transcript_segments = []; // 新增：重置 final 片段陣列
+                accumulatedFinalTranscript = ''; 
+                currentInterimTranscript = ''; 
+                final_transcript_segments = []; // 重置 final 片段陣列
                 startTime = new Date();
             };
 
             recognition.onresult = (event) => {
                 let latest_interim_for_display = '';
 
-    // 遍歷所有收到的結果
-    for (let i = 0; i < event.results.length; ++i) {
-        const result = event.results[i];
-        const transcript_from_result = result[0].transcript;
+                for (let i = 0; i < event.results.length; ++i) {
+                    const result = event.results[i];
+                    const transcript_from_result = result[0].transcript;
 
-        if (result.isFinal) {
-            // 如果是 final 結果，用它更新/設置 final_transcript_segments 陣列中對應索引的內容
-            // .trim() 確保移除前後多餘空格，避免累計空格問題
-            final_transcript_segments[i] = transcript_from_result.trim();
-        } else {
-            // 如果不是 final，我們只關心最後一個 interim result 用於即時顯示
-            if (i === event.results.length - 1) {
-                latest_interim_for_display = transcript_from_result;
-            }
-        }
-    }
+                    if (result.isFinal) {
+                        final_transcript_segments[i] = transcript_from_result.trim();
+                    } else {
+                        if (i === event.results.length - 1) {
+                            latest_interim_for_display = transcript_from_result;
+                        }
+                    }
+                }
 
-    // 從 final_transcript_segments 陣列構建完整的 final 文本字串
-    // .filter(segment => segment) 會移除陣列中可能因某些索引未被賦值而產生的 undefined 或空字串
-    const complete_final_text = final_transcript_segments.filter(segment => segment).join(' ');
-
-    // 更新全局變量，供 onend 事件計算 WPM 使用
-    accumulatedFinalTranscript = complete_final_text;
-    // currentInterimTranscript 更新為最新的 interim 片段 (如果有的話)
-    currentInterimTranscript = latest_interim_for_display.trim();
-
-    // 更新到畫面上顯示的文字
-    // 顯示所有已確認的 final 片段，如果後面有最新的 interim 片段，也加上去
-    transcriptOutput.textContent = complete_final_text + (latest_interim_for_display.trim() ? ' ' + latest_interim_for_display.trim() : '');
-};
-    let new_final_transcript_parts = '';
-    let new_interim_transcript_part = '';
-
-    // 遍歷所有目前收到的語音辨識結果
-    for (let i = 0; i < event.results.length; i++) {
-        const transcriptSegment = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-            new_final_transcript_parts += transcriptSegment + ' ';
-        } else {
-            // 對於 interim 結果，我們只關心最新的那一個
-            // （通常 Speech API 會把所有之前的 interim 都變成 final，只留最後一個是 interim）
-            // 簡單起見，這裡會串接所有非 final 的，但通常只有最後一段有意義
-            new_interim_transcript_part += transcriptSegment;
-        }
-    }
-
-    // 更新全局變數 accumulatedFinalTranscript，這樣在測試結束 (onend) 時能用它來計算 WPM
-    // new_final_transcript_parts 包含了所有已確認的最終片段
-    accumulatedFinalTranscript = new_final_transcript_parts.trim();
-
-    // 為了更精確地顯示當前正在辨識的 interim 文字，
-    // 我們只取 event.results 中最後一個非 final 的結果。
-    let display_interim = '';
-    if (event.results.length > 0) {
-        const lastResult = event.results[event.results.length - 1];
-        if (!lastResult.isFinal) {
-            display_interim = lastResult[0].transcript;
-        }
-    }
-    currentInterimTranscript = display_interim; // 更新全局的 currentInterimTranscript
-
-    // 更新畫面顯示：顯示所有已確認的最終片段，再加上當前最新的、未確認的片段
-    transcriptOutput.textContent = new_final_transcript_parts + display_interim;
-};
+                const complete_final_text = final_transcript_segments.filter(segment => segment).join(' ');
+                accumulatedFinalTranscript = complete_final_text;
+                currentInterimTranscript = latest_interim_for_display.trim();
+                transcriptOutput.textContent = complete_final_text + (latest_interim_for_display.trim() ? ' ' + latest_interim_for_display.trim() : '');
+            };
 
             recognition.onend = () => {
                 statusDiv.textContent = "Processing complete. Tap Start to try again.";
@@ -272,22 +225,7 @@
                 startButton.disabled = false;
                 stopButton.disabled = true;
 
-                // 最終計算時，使用 accumulatedFinalTranscript
-                // 如果 accumulatedFinalTranscript 為空，但 currentInterimTranscript 有內容（例如使用者未說完就停止），
-                // 可以考慮也使用 currentInterimTranscript，但 accumulatedFinalTranscript 優先
                 let textForCalculation = accumulatedFinalTranscript.trim();
-
-                // 如果 accumulatedFinalTranscript 是空的，且 recognition 是被手動 stop() 的，
-                // 那麼 currentInterimTranscript 可能包含使用者最後未 final 的話語
-                // 但要注意，如果 recognition 是因為靜默而自動停止，currentInterimTranscript 可能是空的或不準確
-                // 為求簡化和準確，主要依賴 accumulatedFinalTranscript
-                if (!textForCalculation && currentInterimTranscript.trim() && (new Date() - startTime) / 1000 > 0.5) {
-                    // 這裡可以有一個策略決定是否在 accumulatedFinalTranscript 為空時使用 currentInterimTranscript
-                    // 暫時我們優先使用 accumulatedFinalTranscript，除非它是空的且有 interim。
-                    // 但這也可能導致重複計算，因為 interim 在下一次說話時可能變成 final。
-                    // 為了避免 1205 WPM 的問題，我們嚴格一點，主要看 final 的。
-                    // textForCalculation = currentInterimTranscript.trim(); // 可以打開這個，但要小心副作用
-                }
 
                 if (textForCalculation === '') {
                      resultsDiv.innerHTML = "No clear speech was finalized for calculation. <br>Ensure you speak clearly and allow time for finalization.";
@@ -295,22 +233,20 @@
                      return;
                 }
 
-                transcriptOutput.textContent = textForCalculation; // 只顯示用於計算的最終文字
+                transcriptOutput.textContent = textForCalculation; 
 
                 const endTime = new Date();
                 const timeDiffSeconds = (endTime - startTime) / 1000;
 
-                // 避免時間過短導致 WPM 過高
                 if (timeDiffSeconds < 0.5 && textForCalculation.split(/\s+/).filter(word => word.length > 0).length <= 3) {
                     resultsDiv.innerHTML = `Spoke for ${timeDiffSeconds.toFixed(2)}s. Too short for reliable WPM. <br>Recognized: "${textForCalculation}"`;
                     return;
                 }
 
-
                 const words = textForCalculation.trim().split(/\s+/).filter(word => word.length > 0);
                 const wordCount = words.length;
 
-                if (wordCount > 0 && timeDiffSeconds > 0.2) { // 稍微放寬一點點時間下限
+                if (wordCount > 0 && timeDiffSeconds > 0.2) { 
                     const wpm = Math.round((wordCount / timeDiffSeconds) * 60);
                     resultsDiv.innerHTML = `
                         Duration: <span>${timeDiffSeconds.toFixed(2)}s</span><br>
@@ -322,9 +258,11 @@
                 } else {
                     resultsDiv.innerHTML = "Not enough data for WPM (duration too short or no clear words finalized).";
                 }
-                // 重置以備下次使用
+                
+                // 在 onend 的最後重置，確保下次 start 是乾淨的
                 accumulatedFinalTranscript = '';
                 currentInterimTranscript = '';
+                // final_transcript_segments 已經在 onstart 時重置了
             };
 
             recognition.onerror = (event) => {
@@ -342,18 +280,20 @@
                 stopButton.disabled = true;
                 accumulatedFinalTranscript = '';
                 currentInterimTranscript = '';
+                final_transcript_segments = []; // 也在此處重置，以防錯誤後狀態不一致
             };
         }
 
         startButton.addEventListener('click', () => {
             if (recognition) {
                 try {
-                    // 重置狀態變數
+                    // 重置狀態變數 (在 onstart 中已經有重置，這裡可選，但確保萬無一失)
                     accumulatedFinalTranscript = '';
                     currentInterimTranscript = '';
                     transcriptOutput.textContent = '...';
                     resultsDiv.textContent = '';
-                    
+                    final_transcript_segments = []; // 確保在 start 時也是乾淨的
+
                     recognition.start();
                 } catch(e) {
                     console.error("Error starting recognition:", e);
@@ -363,7 +303,7 @@
                         statusDiv.textContent = "Error starting. Refresh or check mic permission.";
                     }
                     statusDiv.className = 'status error';
-                    startButton.disabled = false; // Re-enable start if it failed
+                    startButton.disabled = false; 
                     stopButton.disabled = true;
                 }
             }
@@ -371,7 +311,7 @@
 
         stopButton.addEventListener('click', () => {
             if (recognition) {
-                recognition.stop(); // 這會觸發 'onend' 事件
+                recognition.stop(); 
                 statusDiv.textContent = "Stopping and calculating...";
                 statusDiv.className = 'status processing';
             }
