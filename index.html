@@ -269,36 +269,38 @@
                 }
                 logToScreen(`onresult triggered. Results length: ${event.results.length}, Result index: ${event.resultIndex}`);
                 let latest_interim_for_display = '';
-                let new_final_text_this_event = ''; 
+                let latest_final_transcript_this_event = ''; // Store the latest final transcript from this event
 
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                for (let i = 0; i < event.results.length; ++i) { // Iterate all results, not just from event.resultIndex
                     const result = event.results[i];
                     const transcript_segment = result[0].transcript;
 
                     if (result.isFinal) {
-                        new_final_text_this_event += transcript_segment.trim() + ' '; 
-                        logToScreen(`Segment ${i} (final): ${transcript_segment.trim()}`);
+                        // The latest segment in event.results that isFinal is the most complete current final version
+                        latest_final_transcript_this_event = transcript_segment.trim();
+                        logToScreen(`Segment ${i} (final) considered: "${latest_final_transcript_this_event}"`);
                     } else {
-                        latest_interim_for_display += transcript_segment; 
+                        latest_interim_for_display += transcript_segment;
                     }
                 }
-                // Log interim only once per event if it changes to reduce noise
-                if (latest_interim_for_display.trim() !== currentInterimTranscript && latest_interim_for_display.trim() !== "") {
-                     logToScreen(`Interim display update: ${latest_interim_for_display.trim()}`);
-                }
 
-
-                if (new_final_text_this_event.trim().length > 0) {
-                     accumulatedFinalTranscript = (accumulatedFinalTranscript + ' ' + new_final_text_this_event.trim()).trim();
-                     logToScreen(`Updated accumulatedFinalTranscript: "${accumulatedFinalTranscript}"`);
+                // If a new final transcript was found in this event, it becomes THE accumulatedFinalTranscript
+                if (latest_final_transcript_this_event.length > 0) {
+                    accumulatedFinalTranscript = latest_final_transcript_this_event;
+                    logToScreen(`Updated accumulatedFinalTranscript (REPLACED): "${accumulatedFinalTranscript}"`);
                 }
                 
                 currentInterimTranscript = latest_interim_for_display.trim();
+                // Log interim only once per event if it changes to reduce noise
+                // This check might need adjustment if interim updates frequently without actual change
+                // For now, simple logging:
+                if (currentInterimTranscript.length > 0) {
+                     logToScreen(`Current interim display update: "${currentInterimTranscript}"`);
+                }
                 
                 transcriptOutput.textContent = accumulatedFinalTranscript + 
                     (currentInterimTranscript ? (accumulatedFinalTranscript ? ' ' : '') + currentInterimTranscript : '');
             };
-
             recognition.onend = () => {
                 isRecognizing = false;
                 logToScreen("Recognition ended.");
